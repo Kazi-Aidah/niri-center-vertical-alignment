@@ -1,0 +1,214 @@
+diff --git a/docs/wiki/Configuration:-Layout.md b/docs/wiki/Configuration:-Layout.md
+index 5e5e2a5c..432617dd 100644
+--- a/docs/wiki/Configuration:-Layout.md
++++ b/docs/wiki/Configuration:-Layout.md
+@@ -9,6 +9,7 @@ layout {
+     gaps 16
+     center-focused-column "never"
+     always-center-single-column
++    center-single-window-vertically
+     empty-workspace-above-first
+     default-column-display "tabbed"
+     background-color "#003300"
+@@ -142,6 +143,18 @@ layout {
+ }
+ ```
+ 
++### `center-single-window-vertically`
++
++<sup>Since: next release</sup>
++
++If set, niri will vertically center a window that is alone in its column when the window is shorter than the working area, leaving equal empty space above and below it, instead of aligning it to the top. Columns with more than one window are unaffected.
++
++```kdl
++layout {
++    center-single-window-vertically
++}
++```
++
+ ### `empty-workspace-above-first`
+ 
+ <sup>Since: 25.01</sup>
+diff --git a/niri-config/src/layout.rs b/niri-config/src/layout.rs
+index f84528bd..45e23335 100644
+--- a/niri-config/src/layout.rs
++++ b/niri-config/src/layout.rs
+@@ -19,6 +19,7 @@ pub struct Layout {
+     pub preset_window_heights: Vec<PresetSize>,
+     pub center_focused_column: CenterFocusedColumn,
+     pub always_center_single_column: bool,
++    pub center_single_window_vertically: bool,
+     pub empty_workspace_above_first: bool,
+     pub default_column_display: ColumnDisplay,
+     pub gaps: f64,
+@@ -42,6 +43,7 @@ impl Default for Layout {
+             default_column_width: Some(PresetSize::Proportion(0.5)),
+             center_focused_column: CenterFocusedColumn::Never,
+             always_center_single_column: false,
++            center_single_window_vertically: false,
+             empty_workspace_above_first: false,
+             default_column_display: ColumnDisplay::Normal,
+             gaps: 16.,
+@@ -66,6 +68,7 @@ impl MergeWith<LayoutPart> for Layout {
+             tab_indicator,
+             insert_hint,
+             always_center_single_column,
++            center_single_window_vertically,
+             empty_workspace_above_first,
+             gaps,
+         );
+@@ -117,6 +120,8 @@ pub struct LayoutPart {
+     #[knuffel(child)]
+     pub always_center_single_column: Option<Flag>,
+     #[knuffel(child)]
++    pub center_single_window_vertically: Option<Flag>,
++    #[knuffel(child)]
+     pub empty_workspace_above_first: Option<Flag>,
+     #[knuffel(child, unwrap(argument, str))]
+     pub default_column_display: Option<ColumnDisplay>,
+diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
+index 329b7669..f3d5dec5 100644
+--- a/niri-config/src/lib.rs
++++ b/niri-config/src/lib.rs
+@@ -811,6 +811,8 @@ mod tests {
+ 
+                 center-focused-column "on-overflow"
+ 
++                center-single-window-vertically
++
+                 default-column-display "tabbed"
+ 
+                 insert-hint {
+@@ -1448,6 +1450,7 @@ mod tests {
+                 ],
+                 center_focused_column: OnOverflow,
+                 always_center_single_column: false,
++                center_single_window_vertically: true,
+                 empty_workspace_above_first: false,
+                 default_column_display: Tabbed,
+                 gaps: 8.0,
+diff --git a/src/layout/scrolling.rs b/src/layout/scrolling.rs
+index 007bcaf5..5d443b7d 100644
+--- a/src/layout/scrolling.rs
++++ b/src/layout/scrolling.rs
+@@ -417,6 +417,12 @@ impl<W: LayoutElement> ScrollingSpace<W> {
+         self.columns.iter_mut().flat_map(|col| col.tiles.iter_mut())
+     }
+ 
++    /// Tile offsets of a column, for tests.
++    #[cfg(test)]
++    pub fn column_tile_offsets(&self, col_idx: usize) -> Vec<Point<f64, Logical>> {
++        self.columns[col_idx].tile_offsets().collect()
++    }
++
+     pub fn is_empty(&self) -> bool {
+         self.columns.is_empty()
+     }
+@@ -5180,6 +5186,19 @@ impl<W: LayoutElement> Column<W> {
+ 
+         origin.y += self.working_area.loc.y + self.options.layout.gaps;
+ 
++        // Vertically center a lone window in its column, so that the empty
++        // space above and below it is equal, instead of top-aligning it.
++        if self.options.layout.center_single_window_vertically && self.tiles.len() == 1 {
++            let gaps = self.options.layout.gaps;
++            let available = self.working_area.size.h - gaps * 2.;
++            if let Some(data) = self.data.first() {
++                let height = data.size.h;
++                if height < available {
++                    origin.y += (available - height) / 2.;
++                }
++            }
++        }
++
+         if self.display_mode == ColumnDisplay::Tabbed {
+             origin += self
+                 .tab_indicator
+diff --git a/src/layout/tests.rs b/src/layout/tests.rs
+index 31265dd9..e102833a 100644
+--- a/src/layout/tests.rs
++++ b/src/layout/tests.rs
+@@ -2499,6 +2499,67 @@ fn one_window_in_column_becomes_weight_1() {
+     check_ops(ops);
+ }
+ 
++#[test]
++fn single_short_window_is_vertically_centered() {
++    fn make_layout(center: bool) -> Layout<TestWindow> {
++        let options = Options {
++            layout: niri_config::Layout {
++                center_single_window_vertically: center,
++                gaps: 16.,
++                ..Default::default()
++            },
++            ..Default::default()
++        };
++        let mut layout = Layout::with_options(Clock::with_time(Duration::ZERO), options);
++        let ops = [
++            Op::AddOutput(1),
++            Op::AddWindow {
++                params: TestWindowParams::new(0),
++            },
++            Op::SetWindowHeight {
++                id: None,
++                change: SizeChange::SetFixed(100),
++            },
++            Op::Communicate(0),
++        ];
++        check_ops_on_layout(&mut layout, ops);
++        layout
++    }
++
++    // Test outputs are 1280x720 at scale 1 with no struts,
++    // so the working area is 1280x720 at (0, 0).
++    let working_h = 720.;
++    let gaps = 16.;
++
++    let layout = make_layout(true);
++    let scrolling = layout.active_workspace().unwrap().scrolling();
++    let tile_h = scrolling.tiles().next().unwrap().tile_size().h;
++    assert!(
++        tile_h < working_h - gaps * 2. - 1.,
++        "test requires a short window, got height {tile_h}"
++    );
++    let offsets = scrolling.column_tile_offsets(0);
++    // tile_offsets() chains a dummy one-past-the-end offset.
++    assert_eq!(offsets.len(), 2);
++    let expected = gaps + (working_h - gaps * 2. - tile_h) / 2.;
++    assert!(
++        (offsets[0].y - expected).abs() < 1e-6,
++        "centered y = {}, expected {expected}",
++        offsets[0].y
++    );
++
++    // Without the option, the lone window stays top-aligned.
++    let layout = make_layout(false);
++    let scrolling = layout.active_workspace().unwrap().scrolling();
++    let offsets = scrolling.column_tile_offsets(0);
++    assert_eq!(offsets.len(), 2);
++    assert!(
++        (offsets[0].y - gaps).abs() < 1e-6,
++        "top-aligned y = {}, expected {gaps}",
++        offsets[0].y
++    );
++}
++
+ #[test]
+ fn fixed_height_takes_max_non_auto_into_account() {
+     let ops = [
+@@ -3887,6 +3948,7 @@ prop_compose! {
+         tab_indicator in prop::option::of(arbitrary_tab_indicator()),
+         center_focused_column in prop::option::of(arbitrary_center_focused_column()),
+         always_center_single_column in prop::option::of(any::<bool>().prop_map(Flag)),
++        center_single_window_vertically in prop::option::of(any::<bool>().prop_map(Flag)),
+         empty_workspace_above_first in prop::option::of(any::<bool>().prop_map(Flag)),
+     ) -> niri_config::LayoutPart {
+         niri_config::LayoutPart {
+@@ -3894,6 +3956,7 @@ prop_compose! {
+             struts,
+             center_focused_column,
+             always_center_single_column,
++            center_single_window_vertically,
+             empty_workspace_above_first,
+             focus_ring,
+             border,
