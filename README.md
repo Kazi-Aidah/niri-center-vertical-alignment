@@ -1,5 +1,7 @@
 # niri-center-vertical-alignment
 
+![demo](demo-niri-vertical-center-alignment.mp4)
+
 In niri, by default, when decreasing the height of a Window, the Window stays top-aligned. This patch + installer tells niri to center windows only in columns that contain a single window.
 
 This *does not* turn Windows into floating ones, it affects only single windows in columns. 
