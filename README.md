@@ -19,6 +19,8 @@ cd niri-center-vertical-alignment
 ./install.sh --enable-config
 ```
 
+Skip the 15-minute build: grab the prebuilt binary from the [v26.04-centered release](https://github.com/Kazi-Aidah/niri-center-vertical-alignment/releases/tag/v26.04-centered) instead.
+
 Then **log out and back in** (no reboot needed).
 
 New config option:
