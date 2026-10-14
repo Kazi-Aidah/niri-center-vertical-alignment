@@ -34,7 +34,7 @@ else
     echo "cloning niri into $SRC_DIR"
     git clone --quiet https://github.com/niri-wm/niri "$SRC_DIR"
 fi
-git -C "$SRC_DIR" checkout --quiet "$UPSTREAM_COMMIT"
+git -C "$SRC_DIR" reset --quiet --hard "$UPSTREAM_COMMIT"
 if git -C "$SRC_DIR" apply --check "$PATCH"; then
     git -C "$SRC_DIR" apply "$PATCH"
     echo "patch applied"
