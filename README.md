@@ -1,6 +1,6 @@
-# niri-center-vertical-alignment
+# niri-vertical-center-alignment
 
-![demo](demo-niri-vertical-center-alignment.mp4)
+![demo](https://raw.githubusercontent.com/Kazi-Aidah/niri-vertical-center-alignment/main/demo-niri-vertical-center-alignment.mp4)
 
 In niri, by default, when decreasing the height of a Window, the Window stays top-aligned. This patch + installer tells niri to center windows only in columns that contain a single window.
 
@@ -16,12 +16,12 @@ Upstream niri (as of 26.04) has no such option.
 
 Run:
 ```sh
-git clone https://github.com/Kazi-Aidah/niri-center-vertical-alignment
-cd niri-center-vertical-alignment
+git clone https://github.com/Kazi-Aidah/niri-vertical-center-alignment
+cd niri-vertical-center-alignment
 ./install.sh --enable-config
 ```
 
-Skip the 15-minute build: grab the prebuilt binary from the [v26.04-centered release](https://github.com/Kazi-Aidah/niri-center-vertical-alignment/releases/tag/v26.04-centered) instead.
+Skip the 15-minute build: grab the prebuilt binary from the [v26.04-centered release](https://github.com/Kazi-Aidah/niri-vertical-center-alignment/releases/tag/v26.04-centered) instead.
 
 Then **log out and back in** (no reboot needed).
 
